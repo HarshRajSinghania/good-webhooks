@@ -78,6 +78,7 @@
     "migrations:generate": "pnpm run build && node scripts/generate-migrations.mjs",
     "test:operations": "pnpm run build && node scripts/check-operations.mjs",
     "test:compat": "pnpm run build && node scripts/check-upgrade-compat.mjs",
+    "test:chaos": "pnpm run build && node scripts/check-chaos.mjs",
     "benchmark": "pnpm run build && node scripts/benchmark.mjs"
   },
   "dependencies": {
