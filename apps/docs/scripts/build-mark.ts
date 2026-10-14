@@ -1,6 +1,6 @@
 /**
  * Regenerates the static assets derived from `lib/mark.ts`:
- * `app/icon.svg`, `app/favicon.ico`, and `public/readme/mark.png`.
+ * `app/icon.svg`, `app/favicon.ico`, and the PNGs in `public/readme/`.
  * Run with `pnpm build:mark` after changing the mark geometry.
  */
 import { writeFile } from 'node:fs/promises'
@@ -57,4 +57,22 @@ await render(svg, gridPx)
   .png()
   .toFile(fileURLToPath(new URL('public/readme/mark.png', root)))
 
-console.log('Wrote app/icon.svg, app/favicon.ico, public/readme/mark.png')
+// Published npm READMEs retain these URLs, but npm strips the picture theme selector.
+// A background keeps the fallback wordmark readable in light, dark, and system modes.
+for (const [theme, ink, background] of [
+  ['light', '#09090b', '#fafafa'],
+  ['dark', '#fafafa', '#18181b'],
+] as const) {
+  const wordmark = `<svg xmlns="http://www.w3.org/2000/svg" width="960" height="168" viewBox="0 0 960 168">
+    <rect width="960" height="168" rx="24" fill="${background}"/>
+    ${svg.replace('<svg ', '<svg x="3" y="12" width="144" height="144" ')}
+    <text x="168" y="118" font-family="Arial, Helvetica, sans-serif" font-size="94" font-weight="700" fill="${ink}">Good Webhooks</text>
+  </svg>`
+  await sharp(Buffer.from(wordmark))
+    .png()
+    .toFile(fileURLToPath(new URL(`public/readme/wordmark-${theme}.png`, root)))
+}
+
+console.log(
+  'Wrote app/icon.svg, app/favicon.ico, public/readme/{mark,wordmark-light,wordmark-dark}.png',
+)
