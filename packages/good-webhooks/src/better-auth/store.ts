@@ -218,16 +218,28 @@ export function createBetterAuthRepository(
       const row = await read(canonicalScope(scope), id)
       return row === null ? null : endpoint(row)
     },
-    async create(scope, data) {
+    async create(scope, data, limit) {
       if (data.status === 'deleted')
         throw new WebhookError('INVALID_INPUT', 'New endpoints cannot be deleted.')
+      if (!Number.isSafeInteger(limit) || limit < 0 || limit > CAPACITY)
+        throw new WebhookError('INVALID_INPUT', `The endpoint limit must be from 0 to ${CAPACITY}.`)
       const key = canonicalScope(scope)
       const keys = allocationKeys(key)
       const occupied = new Set((await readScope(key)).map((row) => row.allocationKey))
       const creationToken = randomUUID()
-      const start = randomInt(CAPACITY)
-      for (let offset = 0; offset < CAPACITY; offset++) {
-        const allocationKey = keys[(start + offset) % CAPACITY]!
+      // New endpoints use only slots below `slots`, so concurrent creates cannot pass the limit.
+      // Endpoints created under a higher limit may hold any slot. Leave room for those at or
+      // above the bound: the bound plus their count never exceeds the limit.
+      const held = keys.map((slotKey) => occupied.has(slotKey))
+      let slots = limit
+      let above = held.slice(limit).filter(Boolean).length
+      while (slots > 0 && slots + above > limit) {
+        slots--
+        if (held[slots]) above++
+      }
+      const start = slots > 0 ? randomInt(slots) : 0
+      for (let offset = 0; offset < slots; offset++) {
+        const allocationKey = keys[(start + offset) % slots]!
         if (occupied.has(allocationKey)) continue
         try {
           const row = await retryRolledBack(() =>
@@ -266,7 +278,7 @@ export function createBetterAuthRepository(
       }
       throw new WebhookError(
         'INVALID_STATE',
-        `A scope may have at most ${CAPACITY} nondeleted endpoints.`,
+        `A scope may have at most ${limit} nondeleted endpoints.`,
       )
     },
     async update(scope, id, revision, patch: StoredEndpointPatch) {
